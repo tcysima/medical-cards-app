@@ -1,0 +1,118 @@
+﻿@page "/"
+@namespace MedicalCardsApp.Web.Components.Pages
+@layout MainLayout
+@inject IMedicalCardsService MedicalService
+
+<PageTitle>Главная - Медицинские карты</PageTitle>
+
+<div class="fade-in">
+    <h1><i class="bi bi-heart-pulse-fill"></i> Система управления медицинскими картами</h1>
+
+    <div class="row mt-4">
+        <div class="col-md-3 mb-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="display-4 mb-3">
+                        <i class="bi bi-people-fill text-danger"></i>
+                    </div>
+                    <h5 class="card-title">Пациенты</h5>
+                    <p class="display-6 fw-bold text-danger">@patientsCount</p>
+                    <a href="/patients" class="btn btn-primary">
+                        <i class="bi bi-arrow-right"></i> Перейти
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="display-4 mb-3">
+                        <i class="bi bi-person-badge-fill text-success"></i>
+                    </div>
+                    <h5 class="card-title">Врачи</h5>
+                    <p class="display-6 fw-bold text-success">@doctorsCount</p>
+                    <a href="/doctors" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-right"></i> Перейти
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="display-4 mb-3">
+                        <i class="bi bi-calendar-check-fill text-warning"></i>
+                    </div>
+                    <h5 class="card-title">Приемы</h5>
+                    <p class="display-6 fw-bold text-warning">@appointmentsCount</p>
+                    <a href="/appointments" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-right"></i> Перейти
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="display-4 mb-3">
+                        <i class="bi bi-file-earmark-medical-fill text-info"></i>
+                    </div>
+                    <h5 class="card-title">Мед. записи</h5>
+                    <p class="display-6 fw-bold text-info">@recordsCount</p>
+                    <a href="/medical-records" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-right"></i> Перейти
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle-fill"></i> О системе</h5>
+                </div>
+                <div class="card-body">
+                    <p class="lead">Веб-приложение для управления электронными медицинскими картами пациентов.</p>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-danger"></i> Ведение базы данных пациентов</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-danger"></i> Учет медицинских записей и диагнозов</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-danger"></i> Планирование приемов у врачей</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-danger"></i> История болезней и лечения</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int patientsCount = 0;
+    private int doctorsCount = 0;
+    private int appointmentsCount = 0;
+    private int recordsCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var patients = await MedicalService.GetAllPatientsAsync();
+        var doctors = await MedicalService.GetAllDoctorsAsync();
+        var appointments = await MedicalService.GetAllAppointmentsAsync();
+        
+        patientsCount = patients.Count();
+        doctorsCount = doctors.Count();
+        appointmentsCount = appointments.Count();
+        recordsCount = 10;
+    }
+}

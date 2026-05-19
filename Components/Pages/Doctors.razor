@@ -1,0 +1,221 @@
+﻿@page "/doctors"
+@namespace MedicalCardsApp.Web.Components.Pages
+@layout MainLayout
+@inject IMedicalCardsService MedicalService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Врачи</PageTitle>
+
+<h1><i class="bi bi-person-badge-fill"></i> Список врачей</h1>
+
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <div class="input-group w-50">
+        <input type="text" class="form-control" placeholder="Поиск врача..." @bind="searchText" @oninput="FilterDoctors" />
+        <button class="btn btn-outline-secondary" type="button"><i class="bi bi-search"></i></button>
+    </div>
+    <button class="btn btn-primary" @onclick="OpenCreateModal">
+        <i class="bi bi-plus-lg"></i> Добавить врача
+    </button>
+</div>
+
+@if (filteredDoctors == null)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border text-danger" role="status"></div>
+        <p class="mt-2">Загрузка данных...</p>
+    </div>
+}
+else if (!filteredDoctors.Any())
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> Врачи не найдены.
+    </div>
+}
+else
+{
+    <div class="table-responsive shadow-sm rounded bg-white">
+        <table class="table table-hover mb-0">
+            <thead class="bg-danger text-white">
+                <tr>
+                    <th>ID</th>
+                    <th>ФИО</th>
+                    <th>Специальность</th>
+                    <th>Телефон</th>
+                    <th style="width: 200px;">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var doctor in filteredDoctors)
+                {
+                    <tr>
+                        <td>@doctor.Id</td>
+                        <td class="fw-bold">@doctor.FullName</td>
+                        <td><span class="badge bg-secondary">@doctor.Specialty</span></td>
+                        <td>@doctor.Phone</td>
+                        <td>
+                            <button class="btn btn-sm btn-info me-2" @onclick="() => ViewDoctorDetails(doctor.Id)" title="Подробнее">
+                                <i class="bi bi-eye"></i> Подробнее
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDelete(doctor.Id, doctor.FullName)" title="Удалить">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Модальное окно добавления -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Добавить врача</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                
+                <EditForm Model="currentDoctor" OnValidSubmit="SaveDoctor">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ФИО Врача <span class="text-danger">*</span></label>
+                            <InputText @bind-Value="currentDoctor.FullName" class="form-control" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Специальность <span class="text-danger">*</span></label>
+                            <InputText @bind-Value="currentDoctor.Specialty" class="form-control" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Телефон</label>
+                            <InputText @bind-Value="currentDoctor.Phone" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModal">Отмена</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-save"></i> Сохранить</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальное окно подтверждения удаления -->
+@if (showDeleteConfirm)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">⚠️ Удаление врача</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Вы действительно хотите удалить врача <strong>@deleteDoctorName</strong>?</p>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> Это действие нельзя отменить.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDelete">Отмена</button>
+                    <button type="button" class="btn btn-danger" @onclick="ExecuteDelete">
+                        <i class="bi bi-trash"></i> Да, удалить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IEnumerable<Doctor> doctors = new List<Doctor>();
+    private IEnumerable<Doctor> filteredDoctors = new List<Doctor>();
+    private string searchText = "";
+    private bool showModal = false;
+    private Doctor currentDoctor = new Doctor();
+    private bool showDeleteConfirm = false;
+    private int deleteDoctorId = 0;
+    private string deleteDoctorName = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await LoadDoctors();
+
+    private async Task LoadDoctors()
+    {
+        doctors = await MedicalService.GetAllDoctorsAsync();
+        FilterDoctors();
+    }
+
+    private void FilterDoctors()
+    {
+        filteredDoctors = string.IsNullOrWhiteSpace(searchText)
+            ? doctors
+            : doctors.Where(d => d.FullName.ToLower().Contains(searchText.ToLower()) ||
+                                 d.Specialty.ToLower().Contains(searchText.ToLower())).ToList();
+    }
+
+    private void OpenCreateModal()
+    {
+        currentDoctor = new Doctor();
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentDoctor = new Doctor();
+    }
+
+    private async Task SaveDoctor()
+    {
+        try
+        {
+            await MedicalService.CreateDoctorAsync(currentDoctor);
+            CloseModal();
+            await LoadDoctors();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при сохранении: {ex.Message}");
+        }
+    }
+
+    private void ViewDoctorDetails(int id)
+    {
+        Navigation.NavigateTo($"/doctors/{id}");
+    }
+
+    private void ConfirmDelete(int id, string fullName)
+    {
+        deleteDoctorId = id;
+        deleteDoctorName = fullName;
+        showDeleteConfirm = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirm = false;
+        deleteDoctorId = 0;
+        deleteDoctorName = string.Empty;
+    }
+
+    private async Task ExecuteDelete()
+    {
+        try
+        {
+            await MedicalService.DeleteDoctorAsync(deleteDoctorId);
+            showDeleteConfirm = false;
+            await LoadDoctors();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при удалении: {ex.Message}");
+        }
+    }
+}

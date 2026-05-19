@@ -1,0 +1,198 @@
+﻿@page "/patients/{PatientId:int}/record"
+@namespace MedicalCardsApp.Web.Components.Pages
+@layout MainLayout
+@inject IMedicalCardsService MedicalService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Медицинская карта</PageTitle>
+
+@if (currentPatient == null)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border text-danger" role="status"></div>
+        <p class="mt-2">Загрузка данных...</p>
+    </div>
+}
+else
+{
+    <div class="fade-in">
+        <!-- Заголовок -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="bi bi-file-earmark-medical-fill"></i> Медицинская карта</h1>
+            <a href="/patients" class="btn btn-outline-secondary">
+                <i class="bi bi-house"></i> К списку
+            </a>
+        </div>
+
+        <!-- Информация о пациенте -->
+        <div class="card mb-4 shadow-sm border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">👤 Пациент: @currentPatient.FullName</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <p class="mb-1"><strong>Дата рождения:</strong> @currentPatient.DateOfBirth.ToString("dd.MM.yyyy")</p>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="mb-1"><strong>Возраст:</strong> @CalculateAge(currentPatient.DateOfBirth) лет</p>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="mb-1"><strong>Контакты:</strong> @currentPatient.Phone</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Форма медицинской записи -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">📝 Новая запись</h5>
+            </div>
+            <div class="card-body">
+                <EditForm Model="medicalRecord" OnValidSubmit="HandleRecordSubmit">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="alert alert-danger" />
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Диагноз *</label>
+                            <InputText @bind-Value="medicalRecord.Diagnosis" class="form-control"
+                                       placeholder="Например: ОРВИ, гипертония" required />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Лечащий врач *</label>
+                            <InputSelect @bind-Value="medicalRecord.DoctorId" class="form-control" required>
+                                <option value="0">Выберите врача</option>
+                                @foreach (var doctor in doctors)
+                                {
+                                    <option value="@doctor.Id">@doctor.FullName (@doctor.Specialty)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Описание диагноза и симптомов *</label>
+                        <InputTextArea @bind-Value="medicalRecord.Description" class="form-control"
+                                       rows="4" placeholder="Опишите жалобы пациента, симптомы, результаты осмотра..." required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Назначенное лечение *</label>
+                        <InputTextArea @bind-Value="treatment" class="form-control"
+                                       rows="4" placeholder="Укажите препараты, дозировку, рекомендации по режиму..." required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Дата приёма *</label>
+                        <InputDate @bind-Value="medicalRecord.RecordDate" class="form-control" required />
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="/patients" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i> Завершить
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-save"></i> Сохранить медицинскую карту
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+
+        <!-- История записей (если есть) -->
+        @if (existingRecords.Any())
+        {
+            <div class="card mt-4 shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">📚 История записей</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Диагноз</th>
+                                    <th>Врач</th>
+                                    <th>Лечение</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var record in existingRecords.OrderByDescending(r => r.RecordDate))
+                                {
+                                    <tr>
+                                        <td>@record.RecordDate.ToString("dd.MM.yyyy")</td>
+                                        <td><span class="badge bg-danger">@record.Diagnosis</span></td>
+                                        <td>@record.Doctor?.FullName</td>
+                                        <td>@record.Treatment?.Substring(0, Math.Min(50, record.Treatment.Length))...</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int PatientId { get; set; }
+
+    private Patient? currentPatient;
+    private MedicalRecord medicalRecord = new MedicalRecord { RecordDate = DateTime.Now };
+    private string treatment = string.Empty;
+    private IEnumerable<Doctor> doctors = new List<Doctor>();
+    private IEnumerable<MedicalRecord> existingRecords = new List<MedicalRecord>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Загружаем данные пациента
+        currentPatient = await MedicalService.GetPatientByIdAsync(PatientId);
+        
+        if (currentPatient == null)
+        {
+            Navigation.NavigateTo("/patients");
+            return;
+        }
+
+        // Загружаем список врачей
+        doctors = await MedicalService.GetAllDoctorsAsync();
+        
+        // Загружаем существующие записи
+        existingRecords = await MedicalService.GetRecordsByPatientIdAsync(PatientId);
+        
+        // Привязываем пациента к записи
+        medicalRecord.PatientId = PatientId;
+    }
+
+    private async Task HandleRecordSubmit()
+    {
+        try
+        {
+            // Объединяем описание и лечение в одно поле (или создайте отдельное поле Treatment в модели)
+            medicalRecord.Description = $"Диагноз: {medicalRecord.Description}\n\n💊 Лечение:\n{treatment}";
+            
+            await MedicalService.CreateMedicalRecordAsync(medicalRecord);
+            
+            // Перенаправляем на страницу пациента
+            Navigation.NavigateTo($"/patients/{PatientId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка: {ex.Message}");
+        }
+    }
+
+    private int CalculateAge(DateTime birthDate)
+    {
+        var today = DateTime.Today;
+        var age = today.Year - birthDate.Year;
+        if (birthDate.Date > today.AddYears(-age)) age--;
+        return age;
+    }
+}

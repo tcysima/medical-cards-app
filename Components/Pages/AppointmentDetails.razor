@@ -1,0 +1,388 @@
+﻿@page "/appointments/{id:int}"
+@namespace MedicalCardsApp.Web.Components.Pages
+@layout MainLayout
+@inject IMedicalCardsService MedicalService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Приём #@appointment?.Id</PageTitle>
+
+@if (appointment == null)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border text-danger" role="status"></div>
+        <p class="mt-2">Загрузка данных...</p>
+    </div>
+}
+else
+{
+    <div class="fade-in">
+        <!-- Кнопка назад -->
+        <div class="mb-3">
+            <a href="/appointments" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Назад к списку
+            </a>
+            <button class="btn btn-primary ms-2" @onclick="() => ShowEditModal = true" title="Редактировать">
+                <i class="bi bi-pencil-square"></i> Редактировать
+            </button>
+            <button class="btn btn-danger ms-2" @onclick="() => ConfirmDelete()" title="Удалить">
+                <i class="bi bi-trash"></i> Удалить
+            </button>
+        </div>
+
+        <!-- Заголовок -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="bi bi-calendar-check"></i> Приём #@appointment.Id</h4>
+                <span class="badge bg-light text-dark fs-6">@appointment.Status</span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-2"><strong>Дата и время:</strong></p>
+                        <p class="fs-5 text-primary">
+                            <i class="bi bi-clock"></i> @appointment.ScheduledDate.ToString("dd.MM.yyyy")
+                            <br />
+                            <small class="text-muted">@appointment.ScheduledDate.ToString("HH:mm")</small>
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-2"><strong>ID приёма:</strong></p>
+                        <p class="fs-5">@appointment.Id</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Информация о пациенте -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100 shadow-sm border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-person-circle"></i> Пациент</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (appointment.Patient != null)
+                        {
+                            <div class="text-center mb-3">
+                                <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center"
+                                     style="width: 80px; height: 80px; font-size: 32px;">
+                                    @appointment.Patient.FullName.Substring(0, 1)
+                                </div>
+                            </div>
+                            <h5 class="text-center mb-3">@appointment.Patient.FullName</h5>
+                            
+                            <div class="mb-3">
+                                <p class="mb-1"><strong>Дата рождения:</strong></p>
+                                <p>
+                                    @appointment.Patient.DateOfBirth.ToString("dd.MM.yyyy")
+                                    (@CalculateAge(appointment.Patient.DateOfBirth) лет)
+                                </p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <p class="mb-1"><strong>Телефон:</strong></p>
+                                <p><i class="bi bi-telephone"></i> @(appointment.Patient.Phone ?? "Не указан")</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <p class="mb-1"><strong>Email:</strong></p>
+                                <p><i class="bi bi-envelope"></i> @(appointment.Patient.Email ?? "Не указан")</p>
+                            </div>
+                            
+                            <a href="/patients/@appointment.Patient.Id" class="btn btn-outline-primary btn-sm w-100">
+                                <i class="bi bi-box-arrow-up-right"></i> Перейти к карте пациента
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Информация о враче -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100 shadow-sm border-success">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-person-badge"></i> Врач</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (appointment.Doctor != null)
+                        {
+                            <div class="text-center mb-3">
+                                <div class="rounded-circle bg-success text-white d-inline-flex align-items-center justify-content-center"
+                                     style="width: 80px; height: 80px; font-size: 32px;">
+                                    @appointment.Doctor.FullName.Substring(0, 1)
+                                </div>
+                            </div>
+                            <h5 class="text-center mb-3">@appointment.Doctor.FullName</h5>
+                            
+                            <div class="mb-3">
+                                <p class="mb-1"><strong>Специальность:</strong></p>
+                                <p><span class="badge bg-success">@appointment.Doctor.Specialty</span></p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <p class="mb-1"><strong>Телефон:</strong></p>
+                                <p><i class="bi bi-telephone"></i> @(appointment.Doctor.Phone ?? "Не указан")</p>
+                            </div>
+                            
+                            <a href="/doctors/@appointment.Doctor.Id" class="btn btn-outline-success btn-sm w-100">
+                                <i class="bi bi-box-arrow-up-right"></i> Перейти к профилю врача
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Медицинская карта и лечение -->
+        @if (medicalRecords.Any())
+        {
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-medical"></i> Медицинская карта и лечение</h5>
+                </div>
+                <div class="card-body">
+                    @foreach (var record in medicalRecords.OrderByDescending(r => r.RecordDate))
+                    {
+                        <div class="border rounded p-3 mb-3 bg-light">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <p class="mb-1"><strong>Дата записи:</strong></p>
+                                    <p>@record.RecordDate.ToString("dd.MM.yyyy")</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <p class="mb-1"><strong>Диагноз:</strong></p>
+                                    <p><span class="badge bg-danger">@record.Diagnosis</span></p>
+                                </div>
+                                <div class="col-md-3">
+                                    <p class="mb-1"><strong>Врач:</strong></p>
+                                    <p>@record.Doctor?.FullName</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <p class="mb-1"><strong>Статус:</strong></p>
+                                    <p><span class="badge bg-info">Активна</span></p>
+                                </div>
+                            </div>
+                            
+                            @if (!string.IsNullOrEmpty(record.Description))
+                            {
+                                <div class="mt-3">
+                                    <p class="mb-1"><strong>Описание и симптомы:</strong></p>
+                                    <p class="text-muted">@record.Description</p>
+                                </div>
+                            }
+                            
+                            @if (!string.IsNullOrEmpty(record.Treatment))
+                            {
+                                <div class="mt-3">
+                                    <p class="mb-1"><strong>💊 Назначенное лечение:</strong></p>
+                                    <div class="alert alert-success mb-0">
+                                        @record.Treatment
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Медицинские записи отсутствуют
+            </div>
+        }
+
+        <!-- Статистика -->
+        <div class="row mt-4">
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-primary h-100">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Всего приёмов у пациента</h5>
+                        <h2 class="display-4">@patientAppointmentCount</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-success h-100">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Завершено</h5>
+                        <h2 class="display-4">@completedAppointmentsCount</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-info h-100">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Запланировано</h5>
+                        <h2 class="display-4">@upcomingAppointmentsCount</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-warning h-100">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Мед. записей</h5>
+                        <h2 class="display-4">@medicalRecords.Count()</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальное окно редактирования -->
+@if (ShowEditModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">✏️ Редактировать приём</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => ShowEditModal = false"></button>
+                </div>
+                
+                <EditForm Model="editAppointment" OnValidSubmit="SaveEditedAppointment">
+                    <DataAnnotationsValidator />
+                    
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Статус</label>
+                            <InputSelect @bind-Value="editAppointment.Status" class="form-control">
+                                <option value="Запланирован">Запланирован</option>
+                                <option value="В процессе">В процессе</option>
+                                <option value="Завершён">Завершён</option>
+                                <option value="Отменён">Отменён</option>
+                            </InputSelect>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Дата и время</label>
+                            <InputDate @bind-Value="editAppointment.ScheduledDate" class="form-control"
+                                       format="dd.MM.yyyy HH:mm" />
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="() => ShowEditModal = false">Отмена</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Сохранить изменения
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальное окно подтверждения удаления -->
+@if (showDeleteConfirm)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">⚠️ Удаление приёма</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showDeleteConfirm = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Вы действительно хотите удалить приём #@appointment.Id?</p>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> Это действие нельзя отменить.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showDeleteConfirm = false">Отмена</button>
+                    <button type="button" class="btn btn-danger" @onclick="ExecuteDelete">
+                        <i class="bi bi-trash"></i> Да, удалить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Appointment? appointment;
+    private IEnumerable<MedicalRecord> medicalRecords = new List<MedicalRecord>();
+    private IEnumerable<Appointment> allPatientAppointments = new List<Appointment>();
+    
+    // Статистика
+    private int patientAppointmentCount;
+    private int completedAppointmentsCount;
+    private int upcomingAppointmentsCount;
+    
+    // Для редактирования
+    private bool ShowEditModal = false;
+    private Appointment editAppointment = new Appointment();
+    
+    // Для удаления
+    private bool showDeleteConfirm = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAppointmentData();
+    }
+
+    private async Task LoadAppointmentData()
+    {
+        appointment = await MedicalService.GetAppointmentByIdAsync(Id);
+        
+        if (appointment != null && appointment.Patient != null)
+        {
+            // Загружаем медицинские записи пациента
+            medicalRecords = await MedicalService.GetRecordsByPatientIdAsync(appointment.PatientId);
+            
+            // Загружаем все приёмы пациента для статистики
+            allPatientAppointments = await MedicalService.GetAppointmentsByPatientIdAsync(appointment.PatientId);
+            
+            // Считаем статистику
+            patientAppointmentCount = allPatientAppointments.Count();
+            completedAppointmentsCount = allPatientAppointments.Count(a => a.Status == "Завершён");
+            upcomingAppointmentsCount = allPatientAppointments.Count(a => a.Status == "Запланирован");
+        }
+    }
+
+    private async Task SaveEditedAppointment()
+    {
+        try
+        {
+            await MedicalService.UpdateAppointmentAsync(editAppointment);
+            ShowEditModal = false;
+            await LoadAppointmentData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при сохранении: {ex.Message}");
+        }
+    }
+
+    private void ConfirmDelete()
+    {
+        showDeleteConfirm = true;
+    }
+
+    private async Task ExecuteDelete()
+    {
+        try
+        {
+            await MedicalService.DeleteAppointmentAsync(Id);
+            Navigation.NavigateTo("/appointments");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при удалении: {ex.Message}");
+        }
+    }
+
+    private int CalculateAge(DateTime birthDate)
+    {
+        var today = DateTime.Today;
+        var age = today.Year - birthDate.Year;
+        if (birthDate.Date > today.AddYears(-age)) age--;
+        return age;
+    }
+}

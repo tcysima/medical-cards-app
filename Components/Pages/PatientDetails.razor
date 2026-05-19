@@ -1,0 +1,266 @@
+﻿@page "/patients/{id:int}"
+@namespace MedicalCardsApp.Web.Components.Pages
+@layout MainLayout
+@inject IMedicalCardsService MedicalService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(patient?.FullName ?? "Загрузка...")</PageTitle>
+
+@if (patient == null)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border text-danger" role="status"></div>
+        <p class="mt-2">Загрузка данных...</p>
+    </div>
+}
+else
+{
+    <div class="fade-in">
+        <!-- Кнопки управления -->
+        <div class="mb-3 d-flex gap-2">
+            <a href="/patients" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Назад к списку
+            </a>
+            <button class="btn btn-primary" @onclick="() => ShowAddRecordModal = true">
+                <i class="bi bi-plus-lg"></i> Добавить медицинскую запись
+            </button>
+        </div>
+
+        <!-- Карточка пациента -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0"><i class="bi bi-person-circle"></i> Информация о пациенте</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>ID:</strong> @patient.Id</p>
+                        <p><strong>ФИО:</strong> @patient.FullName</p>
+                        <p><strong>Дата рождения:</strong> @patient.DateOfBirth.ToString("dd.MM.yyyy")</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Возраст:</strong> @CalculateAge(patient.DateOfBirth) лет</p>
+                        <p><strong>Телефон:</strong> @(patient.Phone ?? "Не указан")</p>
+                        <p><strong>Email:</strong> @(patient.Email ?? "Не указан")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Медицинские записи -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="bi bi-file-earmark-medical"></i> Медицинские записи</h4>
+                <span class="badge bg-light text-dark">@medicalRecords.Count() записей</span>
+            </div>
+            <div class="card-body">
+                @if (!medicalRecords.Any())
+                {
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle"></i> Медицинские записи отсутствуют
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Диагноз</th>
+                                    <th>Описание</th>
+                                    <th>Врач</th>
+                                    <th style="width: 100px;">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var record in medicalRecords.OrderByDescending(r => r.RecordDate))
+                                {
+                                    <tr>
+                                        <td>@record.RecordDate.ToString("dd.MM.yyyy")</td>
+                                        <td><span class="badge bg-danger">@record.Diagnosis</span></td>
+                                        <td>@record.Description</td>
+                                        <td>@record.Doctor?.FullName</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    @onclick="() => ConfirmDeleteRecord(record.Id, record.Diagnosis)"
+                                                    title="Удалить запись">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальное окно добавления записи -->
+@if (ShowAddRecordModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Добавить медицинскую запись</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => ShowAddRecordModal = false"></button>
+                </div>
+                
+                <EditForm Model="newRecord" OnValidSubmit="SaveMedicalRecord">
+                    <DataAnnotationsValidator />
+                    
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Диагноз *</label>
+                            <InputText @bind-Value="newRecord.Diagnosis" class="form-control" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Описание *</label>
+                            <InputTextArea @bind-Value="newRecord.Description" class="form-control" rows="3" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Врач *</label>
+                            <InputSelect @bind-Value="newRecord.DoctorId" class="form-control" required>
+                                <option value="0">Выберите врача</option>
+                                @foreach (var doctor in doctors)
+                                {
+                                    <option value="@doctor.Id">@doctor.FullName (@doctor.Specialty)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Дата записи *</label>
+                            <InputDate @bind-Value="newRecord.RecordDate" class="form-control" required />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="() => ShowAddRecordModal = false">Отмена</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-save"></i> Сохранить запись
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальное окно подтверждения удаления -->
+@if (ShowDeleteRecordModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">⚠️ Удаление записи</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelDeleteRecord"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Вы действительно хотите удалить медицинскую запись?</p>
+                    <div class="alert alert-warning">
+                        <strong>Диагноз:</strong> @DeleteRecordDiagnosis
+                    </div>
+                    <p class="mb-0 text-muted">Это действие нельзя отменить.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDeleteRecord">Отмена</button>
+                    <button type="button" class="btn btn-danger" @onclick="ExecuteDeleteRecord">
+                        <i class="bi bi-trash"></i> Удалить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Patient? patient;
+    private IEnumerable<MedicalRecord> medicalRecords = new List<MedicalRecord>();
+    private IEnumerable<Doctor> doctors = new List<Doctor>();
+
+    // Добавление записи
+    private bool ShowAddRecordModal = false;
+    private MedicalRecord newRecord = new MedicalRecord();
+
+    // Удаление записи
+    private bool ShowDeleteRecordModal = false;
+    private int DeleteRecordId = 0;
+    private string DeleteRecordDiagnosis = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPatientData();
+        doctors = await MedicalService.GetAllDoctorsAsync();
+        newRecord.RecordDate = DateTime.Now;
+    }
+
+    private async Task LoadPatientData()
+    {
+        patient = await MedicalService.GetPatientByIdAsync(Id);
+        if (patient != null)
+        {
+            medicalRecords = await MedicalService.GetRecordsByPatientIdAsync(Id);
+        }
+    }
+
+    private async Task SaveMedicalRecord()
+    {
+        try
+        {
+            newRecord.PatientId = Id;
+            await MedicalService.CreateMedicalRecordAsync(newRecord);
+            ShowAddRecordModal = false;
+            await LoadPatientData();
+            newRecord = new MedicalRecord { RecordDate = DateTime.Now };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при сохранении: {ex.Message}");
+        }
+    }
+
+    // Логика удаления
+    private void ConfirmDeleteRecord(int id, string diagnosis)
+    {
+        DeleteRecordId = id;
+        DeleteRecordDiagnosis = diagnosis;
+        ShowDeleteRecordModal = true;
+    }
+
+    private void CancelDeleteRecord()
+    {
+        ShowDeleteRecordModal = false;
+        DeleteRecordId = 0;
+        DeleteRecordDiagnosis = string.Empty;
+    }
+
+    private async Task ExecuteDeleteRecord()
+    {
+        try
+        {
+            await MedicalService.DeleteMedicalRecordAsync(DeleteRecordId);
+            ShowDeleteRecordModal = false;
+            await LoadPatientData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при удалении: {ex.Message}");
+        }
+    }
+
+    private int CalculateAge(DateTime birthDate)
+    {
+        var today = DateTime.Today;
+        var age = today.Year - birthDate.Year;
+        if (birthDate.Date > today.AddYears(-age)) age--;
+        return age;
+    }
+}

@@ -1,0 +1,18 @@
+
+
+services:
+  medicalcards:
+    image: amirka19/medicalcards:latest  # ← Замените на ваш логин Docker Hub
+    container_name: medical-cards-app
+    ports:
+      - "8080:8080"
+    volumes:
+      # 🔑 Сохраняем БД между перезапусками контейнера
+      - medical_data:/app
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+    restart: unless-stopped
+
+volumes:
+  medical_data:

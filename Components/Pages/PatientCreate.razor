@@ -1,0 +1,89 @@
+﻿@page "/patients/create"
+@namespace MedicalCardsApp.Web.Components.Pages
+@layout MainLayout
+@inject IMedicalCardsService MedicalService
+@inject NavigationManager Navigation
+
+<PageTitle>Новый пациент</PageTitle>
+
+<div class="fade-in">
+    <h1><i class="bi bi-person-plus-fill"></i> Регистрация пациента</h1>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle"></i> @errorMessage
+        </div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">📋 Личные данные</h5>
+        </div>
+        <div class="card-body">
+            <EditForm Model="patient" OnValidSubmit="HandlePatientSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="alert alert-danger" />
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">ФИО Пациента *</label>
+                        <InputText @bind-Value="patient.FullName" class="form-control"
+                                   placeholder="Иванов Иван Иванович" required />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Дата рождения *</label>
+                        <InputDate @bind-Value="patient.DateOfBirth" class="form-control" required />
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Телефон</label>
+                        <InputText @bind-Value="patient.Phone" class="form-control"
+                                   placeholder="+7 (999) 123-45-67" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Email</label>
+                        <InputText @bind-Value="patient.Email" class="form-control"
+                                   placeholder="email@example.com" />
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="/patients" class="btn btn-secondary">
+                        <i class="bi bi-x-lg"></i> Отмена
+                    </a>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-arrow-right"></i> Далее: Медицинская карта
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+
+    <div class="alert alert-info mt-3">
+        <i class="bi bi-info-circle"></i> После сохранения данных пациента вы сможете сразу добавить его медицинскую карту.
+    </div>
+</div>
+
+@code {
+    private Patient patient = new Patient { DateOfBirth = DateTime.Now.AddYears(-20) };
+    private string? errorMessage;
+
+    private async Task HandlePatientSubmit()
+    {
+        try
+        {
+            // Сохраняем пациента
+            await MedicalService.CreatePatientAsync(patient);
+            
+            // Переходим на страницу медицинской карты с новым ID
+            Navigation.NavigateTo($"/patients/{patient.Id}/record");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка при сохранении: {ex.Message}";
+        }
+    }
+}

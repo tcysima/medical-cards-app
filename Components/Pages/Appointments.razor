@@ -1,0 +1,411 @@
+﻿@page "/appointments"
+@namespace MedicalCardsApp.Web.Components.Pages
+@layout MainLayout
+@inject IMedicalCardsService MedicalService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Приёмы</PageTitle>
+
+<h1><i class="bi bi-calendar-check"></i> Приёмы пациентов</h1>
+
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <div class="input-group w-50">
+        <input type="text" class="form-control" placeholder="Поиск приёма..." @bind="searchText" @oninput="FilterAppointments" />
+        <button class="btn btn-outline-secondary" type="button"><i class="bi bi-search"></i></button>
+    </div>
+    <button class="btn btn-primary" @onclick="OpenCreateModal">
+        <i class="bi bi-plus-lg"></i> Новый приём
+    </button>
+</div>
+
+@if (filteredAppointments == null)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border text-danger" role="status"></div>
+        <p class="mt-2">Загрузка данных...</p>
+    </div>
+}
+else if (!filteredAppointments.Any())
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> Приёмы не найдены.
+    </div>
+}
+else
+{
+    <div class="table-responsive shadow-sm rounded bg-white">
+        <table class="table table-hover mb-0">
+            <thead class="bg-danger text-white">
+                <tr>
+                    <th>ID</th>
+                    <th>Дата и время</th>
+                    <th>Пациент</th>
+                    <th>Врач</th>
+                    <th>Статус</th>
+                    <th style="width: 150px;">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var appointment in filteredAppointments.OrderByDescending(a => a.ScheduledDate))
+                {
+                    <tr>
+                        <td>@appointment.Id</td>
+                        <td>
+                            <strong>@appointment.ScheduledDate.ToString("dd.MM.yyyy")</strong><br />
+                            <small class="text-muted">@appointment.ScheduledDate.ToString("HH:mm")</small>
+                        </td>
+                        <td>
+                            <a href="/patients/@appointment.PatientId" class="text-decoration-none">
+                                @appointment.Patient?.FullName
+                            </a>
+                        </td>
+                        <td>@appointment.Doctor?.FullName</td>
+                        <td>
+                            @if (appointment.Status == "Запланирован")
+                            {
+                                <span class="badge bg-success">@appointment.Status</span>
+                            }
+                            else if (appointment.Status == "Завершён")
+                            {
+                                <span class="badge bg-secondary">@appointment.Status</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning text-dark">@appointment.Status</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info me-1" @onclick="() => ViewAppointmentDetails(appointment.Id)" title="Подробнее">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDelete(appointment.Id)" title="Удалить">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Модальное окно создания приёма -->
+@if (showCreateModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">📝 Новый приём</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseCreateModal"></button>
+                </div>
+                
+                <EditForm Model="newAppointment" OnValidSubmit="SaveAppointment">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    
+                    <div class="modal-body">
+                        <!-- Выбор: существующий или новый пациент -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Пациент *</label>
+                            <div class="d-flex gap-3 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="patientType"
+                                           id="existingPatient" value="existing"
+                                           @onclick="() => useExistingPatient = true"
+                                           checked="@(useExistingPatient)" />
+                                    <label class="form-check-label" for="existingPatient">
+                                        Выбрать из списка
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="patientType"
+                                           id="newPatient" value="new"
+                                           @onclick="() => useExistingPatient = false" />
+                                    <label class="form-check-label" for="newPatient">
+                                        Новый пациент
+                                    </label>
+                                </div>
+                            </div>
+
+                            @if (useExistingPatient)
+                            {
+                                <InputSelect @bind-Value="newAppointment.PatientId" class="form-control" required>
+                                    <option value="0">Выберите пациента</option>
+                                    @foreach (var patient in patients)
+                                    {
+                                        <option value="@patient.Id">@patient.FullName</option>
+                                    }
+                                </InputSelect>
+                            }
+                            else
+                            {
+                                <div class="card card-body bg-light">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label small">ФИО пациента *</label>
+                                            <InputText @bind-Value="newPatientFullName" class="form-control form-control-sm"
+                                                       placeholder="Иванов Иван Иванович" required />
+                                        </div>
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label small">Дата рождения *</label>
+                                            <InputDate @bind-Value="newPatientBirthDate" class="form-control form-control-sm" required />
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label small">Телефон</label>
+                                            <InputText @bind-Value="newPatientPhone" class="form-control form-control-sm"
+                                                       placeholder="+7 (999) 123-45-67" />
+                                        </div>
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label small">Email</label>
+                                            <InputText @bind-Value="newPatientEmail" class="form-control form-control-sm"
+                                                       placeholder="email@example.com" />
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Врач *</label>
+                            <InputSelect @bind-Value="newAppointment.DoctorId" class="form-control" required>
+                                <option value="0">Выберите врача</option>
+                                @foreach (var doctor in doctors)
+                                {
+                                    <option value="@doctor.Id">@doctor.FullName (@doctor.Specialty)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Дата и время приёма *</label>
+                            <InputDate @bind-Value="newAppointment.ScheduledDate" class="form-control" format="dd.MM.yyyy HH:mm" required />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Статус</label>
+                            <InputSelect @bind-Value="newAppointment.Status" class="form-control">
+                                <option value="Запланирован">Запланирован</option>
+                                <option value="В процессе">В процессе</option>
+                                <option value="Завершён">Завершён</option>
+                                <option value="Отменён">Отменён</option>
+                            </InputSelect>
+                        </div>
+                        
+                        <hr />
+                        <h6>🏥 Медицинская информация</h6>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Диагноз</label>
+                            <InputText @bind-Value="diagnosis" class="form-control" placeholder="Например: ОРВИ, гипертония" />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Описание и симптомы</label>
+                            <InputTextArea @bind-Value="description" class="form-control" rows="3" placeholder="Жалобы пациента, симптомы..." />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Назначенное лечение</label>
+                            <InputTextArea @bind-Value="treatment" class="form-control" rows="3" placeholder="Препараты, рекомендации..." />
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Отмена</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-save"></i> Создать приём
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальное окно подтверждения удаления -->
+@if (showDeleteConfirm)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">⚠️ Удаление приёма</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Вы действительно хотите удалить этот приём?</p>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> Это действие нельзя отменить.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDelete">Отмена</button>
+                    <button type="button" class="btn btn-danger" @onclick="ExecuteDelete">
+                        <i class="bi bi-trash"></i> Да, удалить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IEnumerable<Appointment> appointments = new List<Appointment>();
+    private IEnumerable<Appointment> filteredAppointments = new List<Appointment>();
+    private IEnumerable<Patient> patients = new List<Patient>();
+    private IEnumerable<Doctor> doctors = new List<Doctor>();
+    private string searchText = "";
+    private bool showCreateModal = false;
+    private bool showDeleteConfirm = false;
+    private int deleteAppointmentId = 0;
+    
+    private Appointment newAppointment = new Appointment();
+    private string diagnosis = string.Empty;
+    private string description = string.Empty;
+    private string treatment = string.Empty;
+    
+    // Для нового пациента
+    private bool useExistingPatient = true;
+    private string newPatientFullName = string.Empty;
+    private DateTime newPatientBirthDate = DateTime.Now.AddYears(-30);
+    private string newPatientPhone = string.Empty;
+    private string newPatientEmail = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await LoadAppointments();
+
+    private async Task LoadAppointments()
+    {
+        appointments = await MedicalService.GetAllAppointmentsAsync();
+        patients = await MedicalService.GetAllPatientsAsync();
+        doctors = await MedicalService.GetAllDoctorsAsync();
+        FilterAppointments();
+    }
+
+    private void FilterAppointments()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            filteredAppointments = appointments;
+        }
+        else
+        {
+            filteredAppointments = appointments.Where(a =>
+                (a.Patient?.FullName.ToLower().Contains(searchText.ToLower()) ?? false) ||
+                (a.Doctor?.FullName.ToLower().Contains(searchText.ToLower()) ?? false) ||
+                a.Status.ToLower().Contains(searchText.ToLower())
+            ).ToList();
+        }
+    }
+
+    private void OpenCreateModal()
+    {
+        newAppointment = new Appointment
+        {
+            ScheduledDate = DateTime.Now.AddDays(1).Date.AddHours(10),
+            Status = "Запланирован"
+        };
+        diagnosis = string.Empty;
+        description = string.Empty;
+        treatment = string.Empty;
+        useExistingPatient = true;
+        newPatientFullName = string.Empty;
+        newPatientPhone = string.Empty;
+        newPatientEmail = string.Empty;
+        newPatientBirthDate = DateTime.Now.AddYears(-30);
+        showCreateModal = true;
+    }
+
+    private void CloseCreateModal()
+    {
+        showCreateModal = false;
+    }
+
+    private async Task SaveAppointment()
+    {
+        try
+        {
+            int patientId = newAppointment.PatientId;
+
+            // Если новый пациент - создаём его
+            if (!useExistingPatient)
+            {
+                if (string.IsNullOrWhiteSpace(newPatientFullName))
+                {
+                    return;
+                }
+
+                var newPatient = new Patient
+                {
+                    FullName = newPatientFullName,
+                    DateOfBirth = newPatientBirthDate,
+                    Phone = newPatientPhone,
+                    Email = newPatientEmail
+                };
+
+                await MedicalService.CreatePatientAsync(newPatient);
+                patientId = newPatient.Id;
+            }
+
+            // Создаём приём с правильным patientId
+            newAppointment.PatientId = patientId;
+            await MedicalService.CreateAppointmentAsync(newAppointment);
+            
+            // Если есть медицинская информация - создаём запись
+            if (!string.IsNullOrEmpty(diagnosis) || !string.IsNullOrEmpty(description))
+            {
+                var medicalRecord = new MedicalRecord
+                {
+                    PatientId = patientId,
+                    DoctorId = newAppointment.DoctorId,
+                    Diagnosis = diagnosis,
+                    Description = description,
+                    Treatment = treatment,
+                    RecordDate = newAppointment.ScheduledDate
+                };
+                await MedicalService.CreateMedicalRecordAsync(medicalRecord);
+            }
+            
+            CloseCreateModal();
+            await LoadAppointments();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при сохранении: {ex.Message}");
+        }
+    }
+
+    private void ViewAppointmentDetails(int id)
+    {
+        Navigation.NavigateTo($"/appointments/{id}");
+    }
+
+    private void ConfirmDelete(int id)
+    {
+        deleteAppointmentId = id;
+        showDeleteConfirm = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirm = false;
+        deleteAppointmentId = 0;
+    }
+
+    private async Task ExecuteDelete()
+    {
+        try
+        {
+            await MedicalService.DeleteAppointmentAsync(deleteAppointmentId);
+            showDeleteConfirm = false;
+            await LoadAppointments();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при удалении: {ex.Message}");
+        }
+    }
+}
