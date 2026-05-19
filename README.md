@@ -27,6 +27,7 @@ cd MedicalCardsWeb
 
 Восстановление зависимостей
 dotnet restore
+dotnet build
 
 Применение миграций базы данных
 dotnet ef database update
